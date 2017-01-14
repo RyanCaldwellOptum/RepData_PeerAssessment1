@@ -8,18 +8,156 @@ output:
 
 ## Loading and preprocessing the data
 
+Here we read in our data:
 
+```{r}
+data <- read.csv("C:/Users/RyanCaldwell/Documents/coursera/Reproducible_Research/Project1/activity.csv")
+```
+
+Next we want to convert the data into a data table and see the structure of table:
+
+```{r}
+library(data.table)
+df <- data.table(data)
+str(df)
+```
+
+We notice that the date field is not in a date format. Here we convert the date column:
+
+```{r}
+df$date <- as.Date(as.character(df$date), format="%Y-%m-%d")
+```
+
+Now check the table structure:
+
+```{r}
+str(df)
+```
+
+We also want to get an idea of how many different days of data we are dealing with. This is important for subsequent analyses in the report.
+
+```{r}
+unique(df$date)
+```
+
+Now it might be informative to know how many observations we have for each day, since that will play a part in the average.
+
+```{r}
+library(dplyr)
+df %>%
+  group_by(date) %>%
+  summarise(n = n())
+```
+
+From this, we see there are 288 observations for each day.
 
 ## What is mean total number of steps taken per day?
 
+Here we want to calculate the total number of steps each day:
 
+```{r}
+total_steps <- df %>%
+  group_by(date) %>%
+  summarise(total_steps = sum(steps, na.rm = TRUE))
+
+head(total_steps)
+```
+
+Now we need to plot the results:
+
+```{r}
+library(ggplot2)
+ggplot(data=total_steps, aes(total_steps)) + geom_histogram()
+```
+
+Now we need to summarize this data by mean and median:
+
+```{r}
+mean(total_steps$total_steps)
+median(total_steps$total_steps)
+```
 
 ## What is the average daily activity pattern?
 
+First we need to create our dataframe of observations:
 
+```{r}
+mean_steps <- df %>%
+  group_by(interval) %>%
+  summarise(avg_steps = mean(steps, na.rm = TRUE))
+head(mean_steps)
+```
+
+Now we need to plot the data:
+
+```{r}
+ggplot(data=mean_steps, aes(x=interval, y=avg_steps)) + 
+  geom_line() +
+  geom_point()
+```
+
+Now we want to know which interval, on average, has the most steps:
+
+```{r}
+mean_steps$interval[which.max(mean_steps$avg_steps)]
+```
 
 ## Imputing missing values
 
+Total number of NAs in data:
+
+```{r}
+sum(colSums(is.na(df)))
+```
+
+We will replace NAs with the average number of steps for that interval
+
+```{r}
+nas_replaced <- df
+for(i in 1:nrow(nas_replaced)){
+  if(is.na(nas_replaced$steps[i]) == TRUE){
+    interval_type = nas_replaced$interval[i]
+    x <- nas_replaced[nas_replaced$interval == interval_type,]
+    interval_mean <- mean(x$interval, na.rm = TRUE)
+    nas_replaced$steps[i] <- interval_mean
+  }
+}
+```
+
+Now let's see how the average steps after imputation compares to before imputation:
+
+```{r}
+total_steps <- nas_replaced %>%
+  group_by(date) %>%
+  summarise(total_steps = sum(steps, na.rm = TRUE))
+```
+
+```{r}
+ggplot(data=total_steps, aes(total_steps)) + geom_histogram()
+```
+
+```{r}
+mean(total_steps$total_steps)
+median(total_steps$total_steps)
+```
+
+We see that the median only changed by around 1,000 steps, but the mean changed by a ton!
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+We want to see if average steps is different for weekdays and weekends
+
+```{r}
+nas_replaced$weekend <- as.factor(ifelse(weekdays(nas_replaced$date) %in% c('Saturday','Sunday'), 'weekend', 'weekday'))
+
+mean_steps <- nas_replaced %>%
+  group_by(interval, weekend) %>%
+  summarise(avg_steps = mean(steps, na.rm = TRUE))
+head(mean_steps)
+
+ggplot(data = mean_steps, aes(x=interval, y=avg_steps)) +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~weekend, nrow=2)
+```
